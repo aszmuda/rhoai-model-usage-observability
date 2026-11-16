@@ -18,6 +18,7 @@ Usage: ./scripts/simulator.sh [COMMAND] [OPTIONS]
   build          Create build resources and build the image in OpenShift (no local Go).
   deploy         Default: ensure Logging, deploy simulator/collector, configure/restart clients.
                  Reuse the existing image; build it only when missing.
+  dashboard      Enable the Perses console integration and apply the Usage dashboard.
   teardown       Delete the external-metering namespace and simulator cluster RBAC.
   test           Run the small Go API test locally (requires Go 1.25+).
   run            Run locally (requires Go 1.25+).
@@ -96,6 +97,19 @@ done
 
 case "$command_name" in
   -h|--help|help) usage ;;
+  dashboard)
+    need_cluster
+    "$oc_bin" get lokistack usage -n redhat-ods-monitoring > /dev/null
+    "$oc_bin" get configmap usage-gateway-ca-bundle -n redhat-ods-monitoring > /dev/null
+    "$oc_bin" get crd persesdashboards.perses.dev persesdatasources.perses.dev \
+      uiplugins.observability.openshift.io > /dev/null
+    if "$oc_bin" get uiplugin monitoring > /dev/null 2>&1; then
+      "$oc_bin" patch uiplugin monitoring --type=merge \
+        -p '{"spec":{"monitoring":{"perses":{"enabled":true}}}}'
+    else
+      "$oc_bin" apply -k "$repo_dir/deploy/console"
+    fi
+    "$oc_bin" apply -k "$repo_dir/deploy/perses" ;;
   test|run)
     need_go
     cd "$app_dir"

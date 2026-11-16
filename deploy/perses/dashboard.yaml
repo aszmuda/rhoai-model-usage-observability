@@ -11,7 +11,7 @@ spec:
     display:
       name: Usage (Metering)
       description: 'Admin view of external metering CloudEvents: reported token consumption,
-        request outcomes, and usage by user, model, subscription, and provider.'
+        request outcomes, and usage by user, model, and subscription.'
     duration: 1h
     variables:
     - kind: ListVariable
@@ -41,7 +41,7 @@ spec:
               | drop ce_container
               | line_format "{{.ce_line}}"
               | drop ce_line
-              | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+              | json ce_type="type", ce_id="id", usage_model="data.model", usage_user="data.user", usage_subscription="data.subscription"
               | __error__="" | ce_type!="" | ce_id!=""
               | ce_type=~"inference[.]tokens[.]used|inference[.]request[.]error"
               | usage_user!="" | usage_user!="-"
@@ -75,7 +75,7 @@ spec:
               | drop ce_container
               | line_format "{{.ce_line}}"
               | drop ce_line
-              | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+              | json ce_type="type", ce_id="id", usage_model="data.model", usage_user="data.user", usage_subscription="data.subscription"
               | __error__="" | ce_type!="" | ce_id!=""
               | ce_type=~"inference[.]tokens[.]used|inference[.]request[.]error"
               | usage_model!=""
@@ -109,47 +109,13 @@ spec:
               | drop ce_container
               | line_format "{{.ce_line}}"
               | drop ce_line
-              | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+              | json ce_type="type", ce_id="id", usage_model="data.model", usage_user="data.user", usage_subscription="data.subscription"
               | __error__="" | ce_type!="" | ce_id!=""
               | ce_type=~"inference[.]tokens[.]used|inference[.]request[.]error"
               | usage_subscription!=""
               | keep usage_subscription
               [$__range]))
             labelName: usage_subscription
-    - kind: ListVariable
-      spec:
-        allowAllValue: true
-        allowMultiple: true
-        customAllValue: ".*"
-        defaultValue: "$__all"
-        display:
-          description: Filter by provider. Populated from reported usage and error
-            events in the selected time range.
-          hidden: false
-          name: Provider
-        name: provider
-        plugin:
-          kind: LokiLogQLVariable
-          spec:
-            datasource:
-              kind: LokiDatasource
-              name: usage-loki
-            expr: |-
-              count by (usage_provider) (count_over_time(
-              {log_type="application",kubernetes_namespace_name="external-metering"}
-              | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
-              | __error__=""
-              | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
-              | drop ce_container
-              | line_format "{{.ce_line}}"
-              | drop ce_line
-              | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
-              | __error__="" | ce_type!="" | ce_id!=""
-              | ce_type=~"inference[.]tokens[.]used|inference[.]request[.]error"
-              | usage_provider!=""
-              | keep usage_provider
-              [$__range]))
-            labelName: usage_provider
     - kind: ListVariable
       spec:
         allowAllValue: false
@@ -205,21 +171,20 @@ spec:
                     | drop ce_container
                     | line_format "{{.ce_line}}"
                     | drop ce_line
-                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_user="data.user", usage_subscription="data.subscription"
                     | __error__="" | ce_type!="" | ce_id!=""
-                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`
                     | label_format usage_filter_match=`{{ and
                       (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
                       (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
                       (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
-                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
                       }}`
                     | usage_filter_match="true"
-                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_match
                     | ce_type="inference.tokens.used"
                     | json usage_tokens="data.total_tokens"
                     | __error__="" | usage_tokens!=""
-                    | keep usage_user, usage_model, usage_subscription, usage_provider, usage_tokens
+                    | keep usage_user, usage_model, usage_subscription, usage_tokens
                     | unwrap usage_tokens | __error__=""
                     [$__range])) or vector(0)
       totalRequests:
@@ -256,19 +221,18 @@ spec:
                     | drop ce_container
                     | line_format "{{.ce_line}}"
                     | drop ce_line
-                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_user="data.user", usage_subscription="data.subscription"
                     | __error__="" | ce_type!="" | ce_id!=""
-                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`
                     | label_format usage_filter_match=`{{ and
                       (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
                       (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
                       (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
-                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
                       }}`
                     | usage_filter_match="true"
-                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_match
                     | ce_type=~"inference[.]tokens[.]used|inference[.]request[.]error"
-                    | keep usage_user, usage_model, usage_subscription, usage_provider
+                    | keep usage_user, usage_model, usage_subscription
                     [$__range])) or vector(0)
       totalRateLimited:
         kind: Panel
@@ -304,21 +268,20 @@ spec:
                     | drop ce_container
                     | line_format "{{.ce_line}}"
                     | drop ce_line
-                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_user="data.user", usage_subscription="data.subscription"
                     | __error__="" | ce_type!="" | ce_id!=""
-                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`
                     | label_format usage_filter_match=`{{ and
                       (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
                       (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
                       (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
-                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
                       }}`
                     | usage_filter_match="true"
-                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_match
                     | ce_type="inference.request.error"
                     | json usage_status="data.status_code"
                     | __error__="" | usage_status="429"
-                    | keep usage_user, usage_model, usage_subscription, usage_provider
+                    | keep usage_user, usage_model, usage_subscription
                     [$__range])) or vector(0)
       successRate:
         kind: Panel
@@ -353,19 +316,18 @@ spec:
                     | drop ce_container
                     | line_format "{{.ce_line}}"
                     | drop ce_line
-                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_user="data.user", usage_subscription="data.subscription"
                     | __error__="" | ce_type!="" | ce_id!=""
-                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`
                     | label_format usage_filter_match=`{{ and
                       (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
                       (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
                       (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
-                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
                       }}`
                     | usage_filter_match="true"
-                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_match
                     | ce_type="inference.tokens.used"
-                    | keep usage_user, usage_model, usage_subscription, usage_provider
+                    | keep usage_user, usage_model, usage_subscription
                     [$__range])) or vector(0)) / sum (count_over_time(
                     {log_type="application",kubernetes_namespace_name="external-metering"}
                     | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
@@ -374,19 +336,18 @@ spec:
                     | drop ce_container
                     | line_format "{{.ce_line}}"
                     | drop ce_line
-                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_user="data.user", usage_subscription="data.subscription"
                     | __error__="" | ce_type!="" | ce_id!=""
-                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`
                     | label_format usage_filter_match=`{{ and
                       (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
                       (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
                       (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
-                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
                       }}`
                     | usage_filter_match="true"
-                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_match
                     | ce_type=~"inference[.]tokens[.]used|inference[.]request[.]error"
-                    | keep usage_user, usage_model, usage_subscription, usage_provider
+                    | keep usage_user, usage_model, usage_subscription
                     [$__range]))) or vector(1)
       activeUsers:
         kind: Panel
@@ -421,20 +382,19 @@ spec:
                     | drop ce_container
                     | line_format "{{.ce_line}}"
                     | drop ce_line
-                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_user="data.user", usage_subscription="data.subscription"
                     | __error__="" | ce_type!="" | ce_id!=""
-                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`
                     | label_format usage_filter_match=`{{ and
                       (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
                       (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
                       (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
-                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
                       }}`
                     | usage_filter_match="true"
-                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_match
                     | ce_type=~"inference[.]tokens[.]used|inference[.]request[.]error"
                     | usage_user!="" | usage_user!="-"
-                    | keep usage_user, usage_model, usage_subscription, usage_provider
+                    | keep usage_user, usage_model, usage_subscription
                     [$__range]))) or vector(0)
       tokenConsumptionOverTime:
         kind: Panel
@@ -480,29 +440,28 @@ spec:
                     | drop ce_container
                     | line_format "{{.ce_line}}"
                     | drop ce_line
-                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_user="data.user", usage_subscription="data.subscription"
                     | __error__="" | ce_type!="" | ce_id!=""
-                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`
                     | label_format usage_filter_match=`{{ and
                       (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
                       (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
                       (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
-                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
                       }}`
                     | usage_filter_match="true"
-                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_match
                     | label_format model=`{{ regexReplaceAll "^.*/" .usage_model "" }}`, subscription=usage_subscription
                     | ce_type="inference.tokens.used"
                     | json usage_tokens="data.total_tokens"
                     | __error__="" | usage_tokens!=""
-                    | keep usage_user, model, subscription, usage_provider, usage_tokens
+                    | keep usage_user, model, subscription, usage_tokens
                     | unwrap usage_tokens | __error__=""
                     [2h]))
       tokenConsumptionTable:
         kind: Panel
         spec:
           display:
-            description: Reported usage by user, model, subscription, and provider
+            description: Reported usage by user, model, and subscription
               over the selected time window. Model names show only the final path
               segment. Usage events count as successful requests; error events with
               status 429 count as rate limited. Includes
@@ -528,24 +487,20 @@ spec:
                 name: usage_subscription
               - align: left
                 enableSorting: true
-                header: Provider
-                name: usage_provider
-              - align: right
-                enableSorting: true
                 format:
                   shortValues: true
                   unit: decimal
                 header: Tokens used
                 name: 'value #1'
                 sort: desc
-              - align: right
+              - align: left
                 enableSorting: true
                 format:
                   decimalPlaces: 0
                   unit: decimal
                 header: Successful requests
                 name: 'value #2'
-              - align: right
+              - align: left
                 enableSorting: true
                 format:
                   decimalPlaces: 0
@@ -577,24 +532,23 @@ spec:
                     | drop ce_container
                     | line_format "{{.ce_line}}"
                     | drop ce_line
-                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_user="data.user", usage_subscription="data.subscription"
                     | __error__="" | ce_type!="" | ce_id!=""
-                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`
                     | label_format usage_filter_match=`{{ and
                       (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
                       (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
                       (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
-                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
                       }}`
                     | usage_filter_match="true"
-                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_match
                     | label_format model=`{{ regexReplaceAll "^.*/" .usage_model "" }}`
                     | ce_type="inference.tokens.used"
                     | json usage_tokens="data.total_tokens"
                     | __error__="" | usage_tokens!=""
-                    | keep usage_user, model, usage_subscription, usage_provider, usage_tokens
+                    | keep usage_user, model, usage_subscription, usage_tokens
                     | unwrap usage_tokens | __error__=""
-                    [$__range])) by (usage_user, model, usage_subscription, usage_provider)
+                    [$__range])) by (usage_user, model, usage_subscription)
                     or (sum(count_over_time(
                     {log_type="application",kubernetes_namespace_name="external-metering"}
                     | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
@@ -603,21 +557,20 @@ spec:
                     | drop ce_container
                     | line_format "{{.ce_line}}"
                     | drop ce_line
-                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_user="data.user", usage_subscription="data.subscription"
                     | __error__="" | ce_type!="" | ce_id!=""
-                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`
                     | label_format usage_filter_match=`{{ and
                       (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
                       (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
                       (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
-                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
                       }}`
                     | usage_filter_match="true"
-                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_match
                     | label_format model=`{{ regexReplaceAll "^.*/" .usage_model "" }}`
                     | ce_type=~"inference[.]tokens[.]used|inference[.]request[.]error"
-                    | keep usage_user, model, usage_subscription, usage_provider
-                    [$__range])) by (usage_user, model, usage_subscription, usage_provider) * 0)
+                    | keep usage_user, model, usage_subscription
+                    [$__range])) by (usage_user, model, usage_subscription) * 0)
           - kind: TimeSeriesQuery
             spec:
               plugin:
@@ -635,21 +588,20 @@ spec:
                     | drop ce_container
                     | line_format "{{.ce_line}}"
                     | drop ce_line
-                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_user="data.user", usage_subscription="data.subscription"
                     | __error__="" | ce_type!="" | ce_id!=""
-                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`
                     | label_format usage_filter_match=`{{ and
                       (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
                       (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
                       (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
-                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
                       }}`
                     | usage_filter_match="true"
-                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_match
                     | label_format model=`{{ regexReplaceAll "^.*/" .usage_model "" }}`
                     | ce_type="inference.tokens.used"
-                    | keep usage_user, model, usage_subscription, usage_provider
-                    [$__range])) by (usage_user, model, usage_subscription, usage_provider)
+                    | keep usage_user, model, usage_subscription
+                    [$__range])) by (usage_user, model, usage_subscription)
                     or (sum(count_over_time(
                     {log_type="application",kubernetes_namespace_name="external-metering"}
                     | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
@@ -658,21 +610,20 @@ spec:
                     | drop ce_container
                     | line_format "{{.ce_line}}"
                     | drop ce_line
-                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_user="data.user", usage_subscription="data.subscription"
                     | __error__="" | ce_type!="" | ce_id!=""
-                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`
                     | label_format usage_filter_match=`{{ and
                       (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
                       (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
                       (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
-                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
                       }}`
                     | usage_filter_match="true"
-                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_match
                     | label_format model=`{{ regexReplaceAll "^.*/" .usage_model "" }}`
                     | ce_type=~"inference[.]tokens[.]used|inference[.]request[.]error"
-                    | keep usage_user, model, usage_subscription, usage_provider
-                    [$__range])) by (usage_user, model, usage_subscription, usage_provider) * 0)
+                    | keep usage_user, model, usage_subscription
+                    [$__range])) by (usage_user, model, usage_subscription) * 0)
           - kind: TimeSeriesQuery
             spec:
               plugin:
@@ -690,23 +641,22 @@ spec:
                     | drop ce_container
                     | line_format "{{.ce_line}}"
                     | drop ce_line
-                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_user="data.user", usage_subscription="data.subscription"
                     | __error__="" | ce_type!="" | ce_id!=""
-                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`
                     | label_format usage_filter_match=`{{ and
                       (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
                       (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
                       (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
-                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
                       }}`
                     | usage_filter_match="true"
-                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_match
                     | label_format model=`{{ regexReplaceAll "^.*/" .usage_model "" }}`
                     | ce_type="inference.request.error"
                     | json usage_status="data.status_code"
                     | __error__="" | usage_status="429"
-                    | keep usage_user, model, usage_subscription, usage_provider
-                    [$__range])) by (usage_user, model, usage_subscription, usage_provider)
+                    | keep usage_user, model, usage_subscription
+                    [$__range])) by (usage_user, model, usage_subscription)
                     or (sum(count_over_time(
                     {log_type="application",kubernetes_namespace_name="external-metering"}
                     | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
@@ -715,21 +665,20 @@ spec:
                     | drop ce_container
                     | line_format "{{.ce_line}}"
                     | drop ce_line
-                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_user="data.user", usage_subscription="data.subscription"
                     | __error__="" | ce_type!="" | ce_id!=""
-                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`
                     | label_format usage_filter_match=`{{ and
                       (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
                       (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
                       (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
-                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
                       }}`
                     | usage_filter_match="true"
-                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_match
                     | label_format model=`{{ regexReplaceAll "^.*/" .usage_model "" }}`
                     | ce_type=~"inference[.]tokens[.]used|inference[.]request[.]error"
-                    | keep usage_user, model, usage_subscription, usage_provider
-                    [$__range])) by (usage_user, model, usage_subscription, usage_provider) * 0)
+                    | keep usage_user, model, usage_subscription
+                    [$__range])) by (usage_user, model, usage_subscription) * 0)
       prompt_tokens:
         kind: Panel
         spec:
@@ -763,21 +712,20 @@ spec:
                     | drop ce_container
                     | line_format "{{.ce_line}}"
                     | drop ce_line
-                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_user="data.user", usage_subscription="data.subscription"
                     | __error__="" | ce_type!="" | ce_id!=""
-                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`
                     | label_format usage_filter_match=`{{ and
                       (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
                       (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
                       (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
-                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
                       }}`
                     | usage_filter_match="true"
-                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_match
                     | ce_type="inference.tokens.used"
                     | json usage_tokens="data.prompt_tokens"
                     | __error__="" | usage_tokens!=""
-                    | keep usage_user, usage_model, usage_subscription, usage_provider, usage_tokens
+                    | keep usage_user, usage_model, usage_subscription, usage_tokens
                     | unwrap usage_tokens | __error__=""
                     [$__range])) or vector(0)
       completion_tokens:
@@ -813,21 +761,20 @@ spec:
                     | drop ce_container
                     | line_format "{{.ce_line}}"
                     | drop ce_line
-                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_user="data.user", usage_subscription="data.subscription"
                     | __error__="" | ce_type!="" | ce_id!=""
-                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`
                     | label_format usage_filter_match=`{{ and
                       (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
                       (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
                       (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
-                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
                       }}`
                     | usage_filter_match="true"
-                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_match
                     | ce_type="inference.tokens.used"
                     | json usage_tokens="data.completion_tokens"
                     | __error__="" | usage_tokens!=""
-                    | keep usage_user, usage_model, usage_subscription, usage_provider, usage_tokens
+                    | keep usage_user, usage_model, usage_subscription, usage_tokens
                     | unwrap usage_tokens | __error__=""
                     [$__range])) or vector(0)
       cached_input_tokens:
@@ -863,21 +810,20 @@ spec:
                     | drop ce_container
                     | line_format "{{.ce_line}}"
                     | drop ce_line
-                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_user="data.user", usage_subscription="data.subscription"
                     | __error__="" | ce_type!="" | ce_id!=""
-                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`
                     | label_format usage_filter_match=`{{ and
                       (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
                       (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
                       (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
-                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
                       }}`
                     | usage_filter_match="true"
-                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_match
                     | ce_type="inference.tokens.used"
                     | json usage_tokens="data.cached_input_tokens"
                     | __error__="" | usage_tokens!=""
-                    | keep usage_user, usage_model, usage_subscription, usage_provider, usage_tokens
+                    | keep usage_user, usage_model, usage_subscription, usage_tokens
                     | unwrap usage_tokens | __error__=""
                     [$__range])) or vector(0)
       cache_creation_tokens:
@@ -913,21 +859,20 @@ spec:
                     | drop ce_container
                     | line_format "{{.ce_line}}"
                     | drop ce_line
-                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_user="data.user", usage_subscription="data.subscription"
                     | __error__="" | ce_type!="" | ce_id!=""
-                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`
                     | label_format usage_filter_match=`{{ and
                       (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
                       (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
                       (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
-                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
                       }}`
                     | usage_filter_match="true"
-                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_match
                     | ce_type="inference.tokens.used"
                     | json usage_tokens="data.cache_creation_tokens"
                     | __error__="" | usage_tokens!=""
-                    | keep usage_user, usage_model, usage_subscription, usage_provider, usage_tokens
+                    | keep usage_user, usage_model, usage_subscription, usage_tokens
                     | unwrap usage_tokens | __error__=""
                     [$__range])) or vector(0)
       reasoning_tokens:
@@ -963,21 +908,20 @@ spec:
                     | drop ce_container
                     | line_format "{{.ce_line}}"
                     | drop ce_line
-                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_user="data.user", usage_subscription="data.subscription"
                     | __error__="" | ce_type!="" | ce_id!=""
-                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`
                     | label_format usage_filter_match=`{{ and
                       (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
                       (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
                       (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
-                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
                       }}`
                     | usage_filter_match="true"
-                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_match
                     | ce_type="inference.tokens.used"
                     | json usage_tokens="data.reasoning_tokens"
                     | __error__="" | usage_tokens!=""
-                    | keep usage_user, usage_model, usage_subscription, usage_provider, usage_tokens
+                    | keep usage_user, usage_model, usage_subscription, usage_tokens
                     | unwrap usage_tokens | __error__=""
                     [$__range])) or vector(0)
     layouts:

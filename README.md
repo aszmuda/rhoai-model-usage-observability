@@ -4,14 +4,14 @@ This project contains a Go HTTP simulator that accepts metering CloudEvents and 
 
 ## Project layout
 
-    external-metering/simulator/       Go service, container image, and OpenShift resources
-    external-metering/payload-processing-plugins.yaml
-                                        Client plugin configuration and simulator egress policy
-    deploy/logging-operator/           Logging Operator subscription
-    deploy/perses/                     Usage dashboard, Loki datasource, and service CA
-    deploy/console/                    Perses console integration
-    scripts/simulator.sh               Build, deploy, inspect, test, and run commands
-    scripts/render.sh                  Render Kustomize resources; optional direct apply
+| Path | Contents |
+| --- | --- |
+| `external-metering/simulator/` | Go service, container image, and OpenShift resources |
+| `external-metering/payload-processing-plugins.yaml` | Client plugin configuration and simulator egress policy |
+| `deploy/logging-operator/` | Logging Operator subscription |
+| `deploy/perses/` | Usage dashboard and Loki datasource |
+| `deploy/console/` | Perses console integration |
+| `scripts/simulator.sh` | Build, deploy, dashboard, inspect, test, and run commands |
 
 ## Requirements
 
@@ -21,7 +21,6 @@ This project contains a Go HTTP simulator that accepts metering CloudEvents and 
 | Simulator and log forwarding | LokiStack usage in redhat-ods-monitoring; payload-pre-processing and payload-processing Deployments in openshift-ingress |
 | Local test or run | Go 1.25+ |
 | HTTP smoke check | curl and a running simulator, either local or through port-forward |
-| Manifest rendering | oc or standalone kustomize |
 | Console dashboard | COO/Perses with Loki log and time-series plugins |
 
 Check the active cluster before running cluster commands:
@@ -77,28 +76,11 @@ The dedicated ClusterLogForwarder selects only the simulator container and sends
 
 With LokiStack usage and COO/Perses available, install the console integration and dashboard:
 
-    oc apply -k deploy/console
-    oc apply -k deploy/perses
+    ./scripts/simulator.sh dashboard
 
-If a monitoring UIPlugin already exists, merge only the Perses enablement setting through its existing configuration owner rather than replacing the resource. Open Observe → Dashboards (Perses), select redhat-ods-monitoring, and open Usage as an administrator.
+The command checks for LokiStack usage, the existing usage-gateway-ca-bundle ConfigMap, and the Perses resource types. It enables Perses on an existing monitoring UIPlugin with a merge patch that preserves its other settings; if the UIPlugin does not exist, it applies the supplied console resource. If a configuration owner manages the UIPlugin, record the Perses setting there as well. The command then applies the dashboard and datasource.
 
-The dashboard queries metering events from Loki. Its User, Model, Subscription, and Provider filters refer to fields carried in those events.
-
-## Render manifests
-
-The renderer defaults to the full simulator Kustomization:
-
-    ./scripts/render.sh
-    ./scripts/render.sh external-metering/simulator/build
-    ./scripts/render.sh deploy/perses
-    ./scripts/render.sh deploy/console
-    ./scripts/render.sh deploy/logging-operator
-
-Rendering prints the manifests without contacting the cluster. Use --apply to pipe the selected target to oc apply:
-
-    ./scripts/render.sh deploy/perses --apply
-
-Targets can be absolute paths or paths relative to the current directory or repository root. The renderer operates directly on the selected Kustomization.
+The datasource trusts the gateway with the existing usage-gateway-ca-bundle ConfigMap in redhat-ods-monitoring, using its service-ca.crt key. Open Observe → Dashboards (Perses), select redhat-ods-monitoring, and open Usage as an administrator. The dashboard's User, Model, Subscription, and Provider filters refer to fields carried in the metering events.
 
 ## Local development
 

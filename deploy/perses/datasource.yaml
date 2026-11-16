@@ -32,6 +32,6 @@ spec:
       enable: true
       caCert:
         type: configmap
-        name: usage-loki-ca
+        name: usage-gateway-ca-bundle
         namespace: redhat-ods-monitoring
         certPath: service-ca.crt
