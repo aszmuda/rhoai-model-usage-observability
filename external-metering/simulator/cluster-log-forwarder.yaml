@@ -1,0 +1,46 @@
+apiVersion: observability.openshift.io/v1
+kind: ClusterLogForwarder
+metadata:
+  # The operator generates same-named workloads/Services: keep this distinct
+  # from the Go application's Deployment and Service.
+  name: external-metering-collector
+  namespace: external-metering
+spec:
+  managementState: Managed
+  serviceAccount:
+    name: external-metering-log-collector
+  inputs:
+    - name: simulator-logs
+      type: application
+      application:
+        includes:
+          - namespace: external-metering
+            container: external-metering-simulator
+        selector:
+          matchLabels:
+            app.kubernetes.io/name: external-metering-simulator
+  outputs:
+    - name: existing-loki
+      type: lokiStack
+      lokiStack:
+        target:
+          name: usage
+          namespace: redhat-ods-monitoring
+        authentication:
+          token:
+            from: serviceAccount
+        dataModel: Viaq
+      tls:
+        ca:
+          configMapName: external-metering-logging-ca
+          key: service-ca.crt
+  filters:
+    - name: identify-simulator-collector
+      type: openshiftLabels
+      openshiftLabels:
+        collector: external-metering-simulator
+  pipelines:
+    - name: simulator-to-loki
+      inputRefs: [simulator-logs]
+      outputRefs: [existing-loki]
+      filterRefs: [identify-simulator-collector]

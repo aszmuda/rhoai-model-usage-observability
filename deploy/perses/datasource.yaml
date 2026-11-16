@@ -1,0 +1,37 @@
+apiVersion: perses.dev/v1alpha2
+kind: PersesDatasource
+metadata:
+  name: usage-loki
+  namespace: redhat-ods-monitoring
+spec:
+  config:
+    display:
+      name: Existing Loki application logs
+    default: true
+    plugin:
+      kind: LokiDatasource
+      spec:
+        proxy:
+          kind: HTTPProxy
+          spec:
+            url: https://usage-gateway-http.redhat-ods-monitoring.svc:8080/api/logs/v1/application
+            headers:
+              X-Scope-OrgID: application
+            secret: usage-loki-secret
+            allowedEndpoints:
+              - endpointPattern: /loki/api/v1/query
+                method: GET
+              - endpointPattern: /loki/api/v1/query_range
+                method: GET
+              - endpointPattern: /loki/api/v1/labels
+                method: GET
+              - endpointPattern: /loki/api/v1/label/([a-zA-Z0-9_-]+)/values
+                method: GET
+  client:
+    tls:
+      enable: true
+      caCert:
+        type: configmap
+        name: usage-loki-ca
+        namespace: redhat-ods-monitoring
+        certPath: service-ca.crt

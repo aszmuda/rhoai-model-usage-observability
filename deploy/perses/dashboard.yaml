@@ -1,0 +1,1076 @@
+apiVersion: perses.dev/v1alpha2
+kind: PersesDashboard
+metadata:
+  name: dashboard-usage
+  namespace: redhat-ods-monitoring
+  labels:
+    app.opendatahub.io/dashboard: 'true'
+    platform.opendatahub.io/part-of: dashboard
+spec:
+  config:
+    display:
+      name: Usage (Metering)
+      description: 'Admin view of external metering CloudEvents: reported token consumption,
+        request outcomes, and usage by user, model, subscription, and provider.'
+    duration: 1h
+    variables:
+    - kind: ListVariable
+      spec:
+        allowAllValue: true
+        allowMultiple: true
+        customAllValue: ".*"
+        defaultValue: "$__all"
+        display:
+          description: Filter by user. Populated from reported usage and error events
+            in the selected time range.
+          hidden: false
+          name: User
+        name: user
+        plugin:
+          kind: LokiLogQLVariable
+          spec:
+            datasource:
+              kind: LokiDatasource
+              name: usage-loki
+            expr: |-
+              count by (usage_user) (count_over_time(
+              {log_type="application",kubernetes_namespace_name="external-metering"}
+              | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+              | __error__=""
+              | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+              | drop ce_container
+              | line_format "{{.ce_line}}"
+              | drop ce_line
+              | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+              | __error__="" | ce_type!="" | ce_id!=""
+              | ce_type=~"inference[.]tokens[.]used|inference[.]request[.]error"
+              | usage_user!="" | usage_user!="-"
+              | keep usage_user
+              [$__range]))
+            labelName: usage_user
+    - kind: ListVariable
+      spec:
+        allowAllValue: true
+        allowMultiple: true
+        customAllValue: ".*"
+        defaultValue: "$__all"
+        display:
+          description: Filter by model. Populated from reported usage and error events
+            in the selected time range.
+          hidden: false
+          name: Model
+        name: model
+        plugin:
+          kind: LokiLogQLVariable
+          spec:
+            datasource:
+              kind: LokiDatasource
+              name: usage-loki
+            expr: |-
+              count by (usage_model) (count_over_time(
+              {log_type="application",kubernetes_namespace_name="external-metering"}
+              | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+              | __error__=""
+              | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+              | drop ce_container
+              | line_format "{{.ce_line}}"
+              | drop ce_line
+              | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+              | __error__="" | ce_type!="" | ce_id!=""
+              | ce_type=~"inference[.]tokens[.]used|inference[.]request[.]error"
+              | usage_model!=""
+              | keep usage_model
+              [$__range]))
+            labelName: usage_model
+    - kind: ListVariable
+      spec:
+        allowAllValue: true
+        allowMultiple: true
+        customAllValue: ".*"
+        defaultValue: "$__all"
+        display:
+          description: Filter by subscription. Populated from reported usage and error
+            events in the selected time range.
+          hidden: false
+          name: Subscription
+        name: subscription
+        plugin:
+          kind: LokiLogQLVariable
+          spec:
+            datasource:
+              kind: LokiDatasource
+              name: usage-loki
+            expr: |-
+              count by (usage_subscription) (count_over_time(
+              {log_type="application",kubernetes_namespace_name="external-metering"}
+              | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+              | __error__=""
+              | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+              | drop ce_container
+              | line_format "{{.ce_line}}"
+              | drop ce_line
+              | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+              | __error__="" | ce_type!="" | ce_id!=""
+              | ce_type=~"inference[.]tokens[.]used|inference[.]request[.]error"
+              | usage_subscription!=""
+              | keep usage_subscription
+              [$__range]))
+            labelName: usage_subscription
+    - kind: ListVariable
+      spec:
+        allowAllValue: true
+        allowMultiple: true
+        customAllValue: ".*"
+        defaultValue: "$__all"
+        display:
+          description: Filter by provider. Populated from reported usage and error
+            events in the selected time range.
+          hidden: false
+          name: Provider
+        name: provider
+        plugin:
+          kind: LokiLogQLVariable
+          spec:
+            datasource:
+              kind: LokiDatasource
+              name: usage-loki
+            expr: |-
+              count by (usage_provider) (count_over_time(
+              {log_type="application",kubernetes_namespace_name="external-metering"}
+              | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+              | __error__=""
+              | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+              | drop ce_container
+              | line_format "{{.ce_line}}"
+              | drop ce_line
+              | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+              | __error__="" | ce_type!="" | ce_id!=""
+              | ce_type=~"inference[.]tokens[.]used|inference[.]request[.]error"
+              | usage_provider!=""
+              | keep usage_provider
+              [$__range]))
+            labelName: usage_provider
+    - kind: ListVariable
+      spec:
+        allowAllValue: false
+        allowMultiple: false
+        defaultValue: model
+        display:
+          hidden: false
+          name: View by
+        name: view_by
+        plugin:
+          kind: StaticListVariable
+          spec:
+            values:
+            - label: By model
+              value: model
+            - label: By subscription
+              value: subscription
+    # The OpenShift Loki gateway rewrites parsed-label filters and loses regex
+    # backslash escaping. Use [.] for event types and label-format templates for
+    # selected-value regexes. Perses formats All (.*) as (\.\*), handled explicitly.
+    # Prefixing values with # makes the empty-replacement match test safe for blanks.
+    panels:
+      totalTokens:
+        kind: Panel
+        spec:
+          display:
+            description: Sender-reported total tokens from usage events over the selected
+              time window. Shows 0 when no usage is reported.
+            name: Total tokens
+          plugin:
+            kind: StatChart
+            spec:
+              calculation: last
+              format:
+                decimalPlaces: 0
+                shortValues: true
+                unit: decimal
+          queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: LokiTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: LokiDatasource
+                    name: usage-loki
+                  query: |-
+                    sum (sum_over_time(
+                    {log_type="application",kubernetes_namespace_name="external-metering"}
+                    | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+                    | __error__=""
+                    | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+                    | drop ce_container
+                    | line_format "{{.ce_line}}"
+                    | drop ce_line
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | __error__="" | ce_type!="" | ce_id!=""
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_match=`{{ and
+                      (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
+                      (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
+                      (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
+                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
+                      }}`
+                    | usage_filter_match="true"
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | ce_type="inference.tokens.used"
+                    | json usage_tokens="data.total_tokens"
+                    | __error__="" | usage_tokens!=""
+                    | keep usage_user, usage_model, usage_subscription, usage_provider, usage_tokens
+                    | unwrap usage_tokens | __error__=""
+                    [$__range])) or vector(0)
+      totalRequests:
+        kind: Panel
+        spec:
+          display:
+            description: Reported usage plus error events over the selected time window.
+              Requests with no metering event and gateway rejections are not counted.
+              Shows 0 when none are reported.
+            name: Total requests
+          plugin:
+            kind: StatChart
+            spec:
+              calculation: last
+              format:
+                decimalPlaces: 0
+                shortValues: true
+                unit: decimal
+          queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: LokiTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: LokiDatasource
+                    name: usage-loki
+                  query: |-
+                    sum (count_over_time(
+                    {log_type="application",kubernetes_namespace_name="external-metering"}
+                    | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+                    | __error__=""
+                    | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+                    | drop ce_container
+                    | line_format "{{.ce_line}}"
+                    | drop ce_line
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | __error__="" | ce_type!="" | ce_id!=""
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_match=`{{ and
+                      (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
+                      (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
+                      (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
+                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
+                      }}`
+                    | usage_filter_match="true"
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | ce_type=~"inference[.]tokens[.]used|inference[.]request[.]error"
+                    | keep usage_user, usage_model, usage_subscription, usage_provider
+                    [$__range])) or vector(0)
+      totalRateLimited:
+        kind: Panel
+        spec:
+          display:
+            description: Reported inference.request.error events with data.status_code=429
+              over the selected time window. Shows 0 when none are reported; gateway
+              rejections and unreported errors are not counted.
+            name: Total rate limited
+          plugin:
+            kind: StatChart
+            spec:
+              calculation: last
+              format:
+                decimalPlaces: 0
+                shortValues: true
+                unit: decimal
+          queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: LokiTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: LokiDatasource
+                    name: usage-loki
+                  query: |-
+                    sum (count_over_time(
+                    {log_type="application",kubernetes_namespace_name="external-metering"}
+                    | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+                    | __error__=""
+                    | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+                    | drop ce_container
+                    | line_format "{{.ce_line}}"
+                    | drop ce_line
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | __error__="" | ce_type!="" | ce_id!=""
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_match=`{{ and
+                      (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
+                      (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
+                      (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
+                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
+                      }}`
+                    | usage_filter_match="true"
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | ce_type="inference.request.error"
+                    | json usage_status="data.status_code"
+                    | __error__="" | usage_status="429"
+                    | keep usage_user, usage_model, usage_subscription, usage_provider
+                    [$__range])) or vector(0)
+      successRate:
+        kind: Panel
+        spec:
+          display:
+            description: Reported usage events divided by reported usage plus error
+              events. A usage event is treated as a success. Defaults to 100% when
+              no events exist; this is not a gateway-wide success rate.
+            name: Success rate
+          plugin:
+            kind: StatChart
+            spec:
+              calculation: last
+              format:
+                decimalPlaces: 1
+                unit: percent-decimal
+          queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: LokiTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: LokiDatasource
+                    name: usage-loki
+                  query: |-
+                    ((sum (count_over_time(
+                    {log_type="application",kubernetes_namespace_name="external-metering"}
+                    | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+                    | __error__=""
+                    | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+                    | drop ce_container
+                    | line_format "{{.ce_line}}"
+                    | drop ce_line
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | __error__="" | ce_type!="" | ce_id!=""
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_match=`{{ and
+                      (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
+                      (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
+                      (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
+                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
+                      }}`
+                    | usage_filter_match="true"
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | ce_type="inference.tokens.used"
+                    | keep usage_user, usage_model, usage_subscription, usage_provider
+                    [$__range])) or vector(0)) / sum (count_over_time(
+                    {log_type="application",kubernetes_namespace_name="external-metering"}
+                    | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+                    | __error__=""
+                    | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+                    | drop ce_container
+                    | line_format "{{.ce_line}}"
+                    | drop ce_line
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | __error__="" | ce_type!="" | ce_id!=""
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_match=`{{ and
+                      (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
+                      (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
+                      (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
+                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
+                      }}`
+                    | usage_filter_match="true"
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | ce_type=~"inference[.]tokens[.]used|inference[.]request[.]error"
+                    | keep usage_user, usage_model, usage_subscription, usage_provider
+                    [$__range]))) or vector(1)
+      activeUsers:
+        kind: Panel
+        spec:
+          display:
+            description: Distinct nonempty users (excluding -) in reported usage or
+              error events over the selected time window. Shows 0 when no users are
+              reported.
+            name: Active users
+          plugin:
+            kind: StatChart
+            spec:
+              calculation: last
+              format:
+                decimalPlaces: 0
+                unit: decimal
+          queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: LokiTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: LokiDatasource
+                    name: usage-loki
+                  query: |-
+                    count(sum by (usage_user) (count_over_time(
+                    {log_type="application",kubernetes_namespace_name="external-metering"}
+                    | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+                    | __error__=""
+                    | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+                    | drop ce_container
+                    | line_format "{{.ce_line}}"
+                    | drop ce_line
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | __error__="" | ce_type!="" | ce_id!=""
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_match=`{{ and
+                      (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
+                      (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
+                      (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
+                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
+                      }}`
+                    | usage_filter_match="true"
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | ce_type=~"inference[.]tokens[.]used|inference[.]request[.]error"
+                    | usage_user!="" | usage_user!="-"
+                    | keep usage_user, usage_model, usage_subscription, usage_provider
+                    [$__range]))) or vector(0)
+      tokenConsumptionOverTime:
+        kind: Panel
+        spec:
+          display:
+            description: Reported tokens per rolling two hours by model or subscription.
+              Model names show only the final path segment. View by changes only the chart grouping.
+            name: Token consumption chart
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                mode: table
+                position: bottom
+                values: []
+              visual:
+                areaOpacity: 1
+                connectNulls: true
+                display: line
+                lineWidth: 3
+                pointRadius: 6
+                showPoints: always
+                stack: all
+              yAxis:
+                format:
+                  unit: decimal
+                min: 0
+          queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: LokiTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: LokiDatasource
+                    name: usage-loki
+                  query: |-
+                    sum by (${view_by:raw}) (sum_over_time(
+                    {log_type="application",kubernetes_namespace_name="external-metering"}
+                    | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+                    | __error__=""
+                    | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+                    | drop ce_container
+                    | line_format "{{.ce_line}}"
+                    | drop ce_line
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | __error__="" | ce_type!="" | ce_id!=""
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_match=`{{ and
+                      (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
+                      (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
+                      (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
+                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
+                      }}`
+                    | usage_filter_match="true"
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | label_format model=`{{ regexReplaceAll "^.*/" .usage_model "" }}`, subscription=usage_subscription
+                    | ce_type="inference.tokens.used"
+                    | json usage_tokens="data.total_tokens"
+                    | __error__="" | usage_tokens!=""
+                    | keep usage_user, model, subscription, usage_provider, usage_tokens
+                    | unwrap usage_tokens | __error__=""
+                    [2h]))
+      tokenConsumptionTable:
+        kind: Panel
+        spec:
+          display:
+            description: Reported usage by user, model, subscription, and provider
+              over the selected time window. Model names show only the final path
+              segment. Usage events count as successful requests; error events with
+              status 429 count as rate limited. Includes
+              error-only groups with zero tokens. View by changes only the chart.
+            name: Usage breakdown
+          plugin:
+            kind: Table
+            spec:
+              columnSettings:
+              - hide: true
+                name: timestamp
+              - align: left
+                enableSorting: true
+                header: User
+                name: usage_user
+              - align: left
+                enableSorting: true
+                header: Model
+                name: model
+              - align: left
+                enableSorting: true
+                header: Subscription
+                name: usage_subscription
+              - align: left
+                enableSorting: true
+                header: Provider
+                name: usage_provider
+              - align: right
+                enableSorting: true
+                format:
+                  shortValues: true
+                  unit: decimal
+                header: Tokens used
+                name: 'value #1'
+                sort: desc
+              - align: right
+                enableSorting: true
+                format:
+                  decimalPlaces: 0
+                  unit: decimal
+                header: Successful requests
+                name: 'value #2'
+              - align: right
+                enableSorting: true
+                format:
+                  decimalPlaces: 0
+                  unit: decimal
+                header: Rate limited requests
+                name: 'value #3'
+              density: compact
+              pagination: true
+              transforms:
+              - kind: MergeSeries
+                spec: {}
+          # Suffix grouping avoids the authorization gateway lexer's lookahead
+          # across buffer boundaries in these long expressions with zero-fill fallbacks.
+          queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: LokiTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: LokiDatasource
+                    name: usage-loki
+                  query: |-
+                    sum(sum_over_time(
+                    {log_type="application",kubernetes_namespace_name="external-metering"}
+                    | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+                    | __error__=""
+                    | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+                    | drop ce_container
+                    | line_format "{{.ce_line}}"
+                    | drop ce_line
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | __error__="" | ce_type!="" | ce_id!=""
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_match=`{{ and
+                      (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
+                      (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
+                      (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
+                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
+                      }}`
+                    | usage_filter_match="true"
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | label_format model=`{{ regexReplaceAll "^.*/" .usage_model "" }}`
+                    | ce_type="inference.tokens.used"
+                    | json usage_tokens="data.total_tokens"
+                    | __error__="" | usage_tokens!=""
+                    | keep usage_user, model, usage_subscription, usage_provider, usage_tokens
+                    | unwrap usage_tokens | __error__=""
+                    [$__range])) by (usage_user, model, usage_subscription, usage_provider)
+                    or (sum(count_over_time(
+                    {log_type="application",kubernetes_namespace_name="external-metering"}
+                    | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+                    | __error__=""
+                    | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+                    | drop ce_container
+                    | line_format "{{.ce_line}}"
+                    | drop ce_line
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | __error__="" | ce_type!="" | ce_id!=""
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_match=`{{ and
+                      (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
+                      (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
+                      (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
+                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
+                      }}`
+                    | usage_filter_match="true"
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | label_format model=`{{ regexReplaceAll "^.*/" .usage_model "" }}`
+                    | ce_type=~"inference[.]tokens[.]used|inference[.]request[.]error"
+                    | keep usage_user, model, usage_subscription, usage_provider
+                    [$__range])) by (usage_user, model, usage_subscription, usage_provider) * 0)
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: LokiTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: LokiDatasource
+                    name: usage-loki
+                  query: |-
+                    sum(count_over_time(
+                    {log_type="application",kubernetes_namespace_name="external-metering"}
+                    | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+                    | __error__=""
+                    | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+                    | drop ce_container
+                    | line_format "{{.ce_line}}"
+                    | drop ce_line
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | __error__="" | ce_type!="" | ce_id!=""
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_match=`{{ and
+                      (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
+                      (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
+                      (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
+                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
+                      }}`
+                    | usage_filter_match="true"
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | label_format model=`{{ regexReplaceAll "^.*/" .usage_model "" }}`
+                    | ce_type="inference.tokens.used"
+                    | keep usage_user, model, usage_subscription, usage_provider
+                    [$__range])) by (usage_user, model, usage_subscription, usage_provider)
+                    or (sum(count_over_time(
+                    {log_type="application",kubernetes_namespace_name="external-metering"}
+                    | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+                    | __error__=""
+                    | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+                    | drop ce_container
+                    | line_format "{{.ce_line}}"
+                    | drop ce_line
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | __error__="" | ce_type!="" | ce_id!=""
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_match=`{{ and
+                      (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
+                      (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
+                      (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
+                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
+                      }}`
+                    | usage_filter_match="true"
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | label_format model=`{{ regexReplaceAll "^.*/" .usage_model "" }}`
+                    | ce_type=~"inference[.]tokens[.]used|inference[.]request[.]error"
+                    | keep usage_user, model, usage_subscription, usage_provider
+                    [$__range])) by (usage_user, model, usage_subscription, usage_provider) * 0)
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: LokiTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: LokiDatasource
+                    name: usage-loki
+                  query: |-
+                    sum(count_over_time(
+                    {log_type="application",kubernetes_namespace_name="external-metering"}
+                    | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+                    | __error__=""
+                    | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+                    | drop ce_container
+                    | line_format "{{.ce_line}}"
+                    | drop ce_line
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | __error__="" | ce_type!="" | ce_id!=""
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_match=`{{ and
+                      (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
+                      (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
+                      (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
+                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
+                      }}`
+                    | usage_filter_match="true"
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | label_format model=`{{ regexReplaceAll "^.*/" .usage_model "" }}`
+                    | ce_type="inference.request.error"
+                    | json usage_status="data.status_code"
+                    | __error__="" | usage_status="429"
+                    | keep usage_user, model, usage_subscription, usage_provider
+                    [$__range])) by (usage_user, model, usage_subscription, usage_provider)
+                    or (sum(count_over_time(
+                    {log_type="application",kubernetes_namespace_name="external-metering"}
+                    | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+                    | __error__=""
+                    | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+                    | drop ce_container
+                    | line_format "{{.ce_line}}"
+                    | drop ce_line
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | __error__="" | ce_type!="" | ce_id!=""
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_match=`{{ and
+                      (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
+                      (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
+                      (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
+                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
+                      }}`
+                    | usage_filter_match="true"
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | label_format model=`{{ regexReplaceAll "^.*/" .usage_model "" }}`
+                    | ce_type=~"inference[.]tokens[.]used|inference[.]request[.]error"
+                    | keep usage_user, model, usage_subscription, usage_provider
+                    [$__range])) by (usage_user, model, usage_subscription, usage_provider) * 0)
+      prompt_tokens:
+        kind: Panel
+        spec:
+          display:
+            name: Prompt tokens (selected period)
+            description: Reported prompt tokens over the selected time window. Shows
+              0 when no values are reported; not added to the sender's total.
+          plugin:
+            kind: StatChart
+            spec:
+              calculation: last
+              format:
+                decimalPlaces: 0
+                shortValues: true
+                unit: decimal
+          queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: LokiTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: LokiDatasource
+                    name: usage-loki
+                  query: |-
+                    sum (sum_over_time(
+                    {log_type="application",kubernetes_namespace_name="external-metering"}
+                    | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+                    | __error__=""
+                    | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+                    | drop ce_container
+                    | line_format "{{.ce_line}}"
+                    | drop ce_line
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | __error__="" | ce_type!="" | ce_id!=""
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_match=`{{ and
+                      (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
+                      (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
+                      (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
+                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
+                      }}`
+                    | usage_filter_match="true"
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | ce_type="inference.tokens.used"
+                    | json usage_tokens="data.prompt_tokens"
+                    | __error__="" | usage_tokens!=""
+                    | keep usage_user, usage_model, usage_subscription, usage_provider, usage_tokens
+                    | unwrap usage_tokens | __error__=""
+                    [$__range])) or vector(0)
+      completion_tokens:
+        kind: Panel
+        spec:
+          display:
+            name: Completion tokens (selected period)
+            description: Reported completion tokens over the selected time window.
+              Shows 0 when no values are reported; not added to the sender's total.
+          plugin:
+            kind: StatChart
+            spec:
+              calculation: last
+              format:
+                decimalPlaces: 0
+                shortValues: true
+                unit: decimal
+          queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: LokiTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: LokiDatasource
+                    name: usage-loki
+                  query: |-
+                    sum (sum_over_time(
+                    {log_type="application",kubernetes_namespace_name="external-metering"}
+                    | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+                    | __error__=""
+                    | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+                    | drop ce_container
+                    | line_format "{{.ce_line}}"
+                    | drop ce_line
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | __error__="" | ce_type!="" | ce_id!=""
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_match=`{{ and
+                      (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
+                      (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
+                      (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
+                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
+                      }}`
+                    | usage_filter_match="true"
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | ce_type="inference.tokens.used"
+                    | json usage_tokens="data.completion_tokens"
+                    | __error__="" | usage_tokens!=""
+                    | keep usage_user, usage_model, usage_subscription, usage_provider, usage_tokens
+                    | unwrap usage_tokens | __error__=""
+                    [$__range])) or vector(0)
+      cached_input_tokens:
+        kind: Panel
+        spec:
+          display:
+            name: Cached input tokens (selected period)
+            description: Reported cached input tokens over the selected time window.
+              Shows 0 when no values are reported; not added to the sender's total.
+          plugin:
+            kind: StatChart
+            spec:
+              calculation: last
+              format:
+                decimalPlaces: 0
+                shortValues: true
+                unit: decimal
+          queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: LokiTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: LokiDatasource
+                    name: usage-loki
+                  query: |-
+                    sum (sum_over_time(
+                    {log_type="application",kubernetes_namespace_name="external-metering"}
+                    | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+                    | __error__=""
+                    | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+                    | drop ce_container
+                    | line_format "{{.ce_line}}"
+                    | drop ce_line
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | __error__="" | ce_type!="" | ce_id!=""
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_match=`{{ and
+                      (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
+                      (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
+                      (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
+                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
+                      }}`
+                    | usage_filter_match="true"
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | ce_type="inference.tokens.used"
+                    | json usage_tokens="data.cached_input_tokens"
+                    | __error__="" | usage_tokens!=""
+                    | keep usage_user, usage_model, usage_subscription, usage_provider, usage_tokens
+                    | unwrap usage_tokens | __error__=""
+                    [$__range])) or vector(0)
+      cache_creation_tokens:
+        kind: Panel
+        spec:
+          display:
+            name: Cache creation tokens (selected period)
+            description: Reported cache creation tokens over the selected time window.
+              Shows 0 when no values are reported; not added to the sender's total.
+          plugin:
+            kind: StatChart
+            spec:
+              calculation: last
+              format:
+                decimalPlaces: 0
+                shortValues: true
+                unit: decimal
+          queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: LokiTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: LokiDatasource
+                    name: usage-loki
+                  query: |-
+                    sum (sum_over_time(
+                    {log_type="application",kubernetes_namespace_name="external-metering"}
+                    | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+                    | __error__=""
+                    | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+                    | drop ce_container
+                    | line_format "{{.ce_line}}"
+                    | drop ce_line
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | __error__="" | ce_type!="" | ce_id!=""
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_match=`{{ and
+                      (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
+                      (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
+                      (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
+                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
+                      }}`
+                    | usage_filter_match="true"
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | ce_type="inference.tokens.used"
+                    | json usage_tokens="data.cache_creation_tokens"
+                    | __error__="" | usage_tokens!=""
+                    | keep usage_user, usage_model, usage_subscription, usage_provider, usage_tokens
+                    | unwrap usage_tokens | __error__=""
+                    [$__range])) or vector(0)
+      reasoning_tokens:
+        kind: Panel
+        spec:
+          display:
+            name: Reasoning tokens (selected period)
+            description: Reported reasoning tokens over the selected time window.
+              Shows 0 when no values are reported; not added to the sender's total.
+          plugin:
+            kind: StatChart
+            spec:
+              calculation: last
+              format:
+                decimalPlaces: 0
+                shortValues: true
+                unit: decimal
+          queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: LokiTimeSeriesQuery
+                spec:
+                  datasource:
+                    kind: LokiDatasource
+                    name: usage-loki
+                  query: |-
+                    sum (sum_over_time(
+                    {log_type="application",kubernetes_namespace_name="external-metering"}
+                    | json ce_line="message", ce_container="kubernetes.container_name", ce_collector="openshift.labels.collector"
+                    | __error__=""
+                    | ce_container="external-metering-simulator" | ce_collector="external-metering-simulator"
+                    | drop ce_container
+                    | line_format "{{.ce_line}}"
+                    | drop ce_line
+                    | json ce_type="type", ce_id="id", usage_model="data.model", usage_provider="data.provider", usage_user="data.user", usage_subscription="data.subscription"
+                    | __error__="" | ce_type!="" | ce_id!=""
+                    | label_format usage_filter_user=`${user:regex}`, usage_filter_model=`${model:regex}`, usage_filter_subscription=`${subscription:regex}`, usage_filter_provider=`${provider:regex}`
+                    | label_format usage_filter_match=`{{ and
+                      (or (eq .usage_filter_user "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_user) (printf "#%s" .usage_user) "") ""))
+                      (or (eq .usage_filter_model "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_model) (printf "#%s" .usage_model) "") ""))
+                      (or (eq .usage_filter_subscription "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_subscription) (printf "#%s" .usage_subscription) "") ""))
+                      (or (eq .usage_filter_provider "(\\.\\*)") (eq (regexReplaceAll (printf "^#%s$" .usage_filter_provider) (printf "#%s" .usage_provider) "") ""))
+                      }}`
+                    | usage_filter_match="true"
+                    | drop usage_filter_user, usage_filter_model, usage_filter_subscription, usage_filter_provider, usage_filter_match
+                    | ce_type="inference.tokens.used"
+                    | json usage_tokens="data.reasoning_tokens"
+                    | __error__="" | usage_tokens!=""
+                    | keep usage_user, usage_model, usage_subscription, usage_provider, usage_tokens
+                    | unwrap usage_tokens | __error__=""
+                    [$__range])) or vector(0)
+    layouts:
+    - kind: Grid
+      spec:
+        display:
+          collapse:
+            open: true
+          title: Overview
+        items:
+        - content:
+            $ref: '#/spec/panels/totalTokens'
+          height: 5
+          width: 5
+          x: 0
+          "y": 0
+        - content:
+            $ref: '#/spec/panels/totalRequests'
+          height: 5
+          width: 5
+          x: 5
+          "y": 0
+        - content:
+            $ref: '#/spec/panels/totalRateLimited'
+          height: 5
+          width: 5
+          x: 10
+          "y": 0
+        - content:
+            $ref: '#/spec/panels/successRate'
+          height: 5
+          width: 5
+          x: 15
+          "y": 0
+        - content:
+            $ref: '#/spec/panels/activeUsers'
+          height: 5
+          width: 4
+          x: 20
+          "y": 0
+    - kind: Grid
+      spec:
+        display:
+          collapse:
+            open: true
+          title: Token consumption
+        items:
+        - content:
+            $ref: '#/spec/panels/tokenConsumptionOverTime'
+          height: 10
+          width: 24
+          x: 0
+          "y": 0
+        - content:
+            $ref: '#/spec/panels/tokenConsumptionTable'
+          height: 8
+          width: 24
+          x: 0
+          "y": 10
+    - kind: Grid
+      spec:
+        display:
+          collapse:
+            open: true
+          title: Token details
+        items:
+        - content:
+            $ref: '#/spec/panels/prompt_tokens'
+          height: 5
+          width: 8
+          x: 0
+          "y": 0
+        - content:
+            $ref: '#/spec/panels/completion_tokens'
+          height: 5
+          width: 8
+          x: 8
+          "y": 0
+        - content:
+            $ref: '#/spec/panels/cached_input_tokens'
+          height: 5
+          width: 8
+          x: 16
+          "y": 0
+        - content:
+            $ref: '#/spec/panels/cache_creation_tokens'
+          height: 5
+          width: 8
+          x: 0
+          "y": 5
+        - content:
+            $ref: '#/spec/panels/reasoning_tokens'
+          height: 5
+          width: 8
+          x: 8
+          "y": 5

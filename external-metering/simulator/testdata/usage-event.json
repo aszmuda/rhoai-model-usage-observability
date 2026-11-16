@@ -1,0 +1,22 @@
+{
+  "specversion": "1.0",
+  "id": "evt-poc-alice-001",
+  "source": "maas-gateway",
+  "type": "inference.tokens.used",
+  "subject": "alice",
+  "datacontenttype": "application/json",
+  "data": {
+    "user": "alice",
+    "group": "engineering",
+    "subscription": "poc",
+    "provider": "example",
+    "model": "example-model",
+    "prompt_tokens": 150,
+    "completion_tokens": 80,
+    "total_tokens": 230,
+    "cached_input_tokens": 100,
+    "cache_creation_tokens": 0,
+    "reasoning_tokens": 0,
+    "duration_ms": 1200
+  }
+}

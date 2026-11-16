@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: external-metering
+  labels:
+    app.kubernetes.io/part-of: external-metering-simulator
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: external-metering-simulator
+  namespace: external-metering
+  labels:
+    app.kubernetes.io/name: external-metering-simulator
+    app.kubernetes.io/part-of: external-metering-simulator
+spec:
+  lookupPolicy:
+    local: true
+---
+# Binary BuildConfig: initialized and started by scripts/simulator.sh.
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: external-metering-simulator
+  namespace: external-metering
+  labels:
+    app.kubernetes.io/name: external-metering-simulator
+    app.kubernetes.io/part-of: external-metering-simulator
+spec:
+  runPolicy: Serial
+  source:
+    type: Binary
+    binary: {}
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: external-metering-simulator:latest
+  triggers: []
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 3
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi

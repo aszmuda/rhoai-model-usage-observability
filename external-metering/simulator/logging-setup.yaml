@@ -1,0 +1,52 @@
+# Collector prerequisites, included in the simulator Kustomization.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: external-metering-log-collector
+  namespace: external-metering
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: external-metering-collect-application-logs
+subjects:
+  - kind: ServiceAccount
+    name: external-metering-log-collector
+    namespace: external-metering
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: collect-application-logs
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: external-metering-write-application-logs
+rules:
+  # Loki's openshift-logging gateway checks this virtual resource permission.
+  - apiGroups: [loki.grafana.com]
+    resources: [application]
+    resourceNames: [logs]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: external-metering-write-application-logs
+subjects:
+  - kind: ServiceAccount
+    name: external-metering-log-collector
+    namespace: external-metering
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: external-metering-write-application-logs
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: external-metering-logging-ca
+  namespace: external-metering
+  annotations:
+    service.beta.openshift.io/inject-cabundle: 'true'
+data: {}
